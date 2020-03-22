@@ -83,13 +83,13 @@ impl Serial {
         }
     }
 
-    pub fn write_byte_nowait(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<Result<(), UartError>> {
+    pub fn write_byte_nowait(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<()> {
         self.uart.make_progress();
 
         if self.uart.has_space() {
             self.uart.write_byte(byte);
             println!("write_byte({:02x}) - Ok", byte);
-            Poll::Ready(Ok(()))
+            Poll::Ready(())
         } else {
             println!("write_byte({:02x}) - WoudlBlock", byte);
 
@@ -167,11 +167,11 @@ impl Future for SerialWriteFuture<'_> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         while let Some(byte) = self.data.first() {
             match self.serial.write_byte_nowait(cx, *byte) {
-                Poll::Ready(Ok(())) => {
+                Poll::Ready(()) => {
                     self.data = &self.data[1..];
                     continue;
                 },
-                other => return other,
+                Poll::Pending => return Poll::Pending,
             }
         }
         Poll::Ready(Ok(()))
