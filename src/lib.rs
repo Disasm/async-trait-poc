@@ -126,14 +126,14 @@ pub trait AsyncWrite<'a> {
     type WriteFuture: Future<Output=Result<(), Self::Error>>;
 
     /// Transmit the provided data on the specified channel
-    fn try_write(&'a mut self, data: &'a [u8]) -> Self::WriteFuture;
+    fn write(&'a mut self, data: &'a [u8]) -> Self::WriteFuture;
 }
 
 impl<'a> AsyncWrite<'a> for Serial {
     type Error = UartError;
     type WriteFuture = SerialWriteFuture<'a>;
 
-    fn try_write(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
+    fn write(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
         SerialWriteFuture {
             serial: self,
             data,
