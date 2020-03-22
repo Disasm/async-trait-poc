@@ -123,10 +123,10 @@ impl Serial {
 pub trait AsyncWrite {
     /// Transmit error
     type Error;
-    /// Transmit future for polling on completion
+    /// Write future for polling on completion
     type WriteFuture<'t>: Future<Output=Result<(), Self::Error>>;
 
-    /// Transmit the provided data on the specified channel
+    /// Writes an array of bytes to the serial interface
     fn write<'a>(&'a mut self, data: &'a [u8]) -> Self::WriteFuture<'a>;
 }
 
