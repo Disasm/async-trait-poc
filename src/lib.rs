@@ -29,10 +29,10 @@ impl Uart {
         }
     }
 
-    fn progress(&mut self) -> nb::Result<(), UartError> {
+    fn progress(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), UartError>> {
         match self.state {
             UartState::Idle => {
-                Ok(())
+                Poll::Ready(Ok(()))
             },
             UartState::Sending(byte, counter) => {
                 if counter > 0 {
@@ -40,37 +40,38 @@ impl Uart {
                 } else {
                     self.state = UartState::Idle;
                     if byte == 0xff {
-                        return Err(nb::Error::Other(UartError::InvalidData));
+                        return Poll::Ready(Err(UartError::InvalidData));
                     }
                 }
-                Err(nb::Error::WouldBlock)
+                cx.waker().wake_by_ref();
+                Poll::Pending
             },
         }
     }
 
-    pub fn write_byte(&mut self, byte: u8) -> nb::Result<(), UartError> {
+    pub fn write_byte(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<Result<(), UartError>> {
         match self.state {
             UartState::Idle => {
                 self.state = UartState::Sending(byte, 5);
                 println!("write_byte({:02x}) - Ok", byte);
-                Ok(())
+                Poll::Ready(Ok(()))
             },
             UartState::Sending(_, _) => {
                 println!("write_byte({:02x}) - WoudlBlock", byte);
-                self.progress()
+                self.progress(cx)
             },
         }
     }
 
-    pub fn flush(&mut self) -> nb::Result<(), UartError> {
+    pub fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), UartError>> {
         match self.state {
             UartState::Idle => {
                 println!("flush() - Ok");
-                Ok(())
+                Poll::Ready(Ok(()))
             },
             UartState::Sending(_, _) => {
                 println!("flush() - WouldBlock");
-                self.progress()
+                self.progress(cx)
             }
         }
     }
@@ -159,6 +160,14 @@ impl Serial {
             serial: self
         }.await
     }
+
+    fn write_buf_async<'a>(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
+        SerialWriteFuture {
+            serial: self,
+            data,
+            offset: 0
+        }
+    }
 }
 
 pub trait AsyncWrite<'a> {
@@ -176,11 +185,7 @@ impl<'a> AsyncWrite<'a> for Serial {
     type WriteFuture = SerialWriteFuture<'a>;
 
     fn try_write(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
-        SerialWriteFuture {
-            serial: self,
-            data,
-            offset: 0
-        }
+        self.write_buf_async(data)
     }
 }
 
@@ -198,27 +203,16 @@ impl Future for SerialWriteFuture<'_> {
 
         if this.offset <= this.data.len() {
             let byte = this.data[this.offset];
-            match this.serial.uart.write_byte(byte) {
-                Ok(()) => {
+            match this.serial.uart.write_byte(cx, byte) {
+                Poll::Ready(Ok(())) => {
                     this.offset += 1;
                     cx.waker().wake_by_ref();
                     Poll::Pending
-                }
-                Err(nb::Error::WouldBlock) => {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
                 },
-                Err(nb::Error::Other(e)) => Poll::Ready(Err(e))
+                other => other,
             }
         } else {
-            match this.serial.uart.flush() {
-                Ok(()) => Poll::Ready(Ok(())),
-                Err(nb::Error::WouldBlock) => {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                },
-                Err(nb::Error::Other(e)) => Poll::Ready(Err(e))
-            }
+            this.serial.uart.flush(cx)
         }
     }
 }
