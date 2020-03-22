@@ -20,10 +20,17 @@ pub trait AsyncRead {
 pub trait AsyncWrite {
     /// Write error
     type Error;
+    /// Write byte future for polling on completion
+    type WriteByteFuture<'t>: Future<Output=Result<(), Self::Error>>;
     /// Write future for polling on completion
     type WriteFuture<'t>: Future<Output=Result<(), Self::Error>>;
     /// Flush future for polling on completion
     type FlushFuture<'t>: Future<Output=Result<(), Self::Error>>;
+
+    /// Writes a single byte to the serial interface
+    /// When the future completes, data may not be fully transmitted.
+    /// Call `flush` to ensure that no data is left buffered.
+    fn write_byte(&mut self, byte: u8) -> Self::WriteByteFuture<'_>;
 
     /// Writes an array of bytes to the serial interface
     /// When the future completes, data may not be fully transmitted.
@@ -137,8 +144,16 @@ pub mod write {
 
     impl<S: Default + 'static> AsyncWrite for S {
         type Error = S::Error;
+        type WriteByteFuture<'t> = DefaultWriteByteFuture<'t, S>;
         type WriteFuture<'t> = DefaultWriteFuture<'t, S>;
         type FlushFuture<'t> = DefaultFlushFuture<'t, S>;
+
+        fn write_byte(&mut self, byte: u8) -> Self::WriteByteFuture<'_> {
+            DefaultWriteByteFuture {
+                serial: self,
+                byte
+            }
+        }
 
         fn write<'a>(&'a mut self, data: &'a [u8]) -> DefaultWriteFuture<'a, S> {
             DefaultWriteFuture {
@@ -150,6 +165,27 @@ pub mod write {
         fn flush(&mut self) -> DefaultFlushFuture<'_, S> {
             DefaultFlushFuture {
                 serial: self
+            }
+        }
+    }
+
+    pub struct DefaultWriteByteFuture<'a, S> {
+        serial: &'a mut S,
+        byte: u8,
+    }
+
+    impl<'a, S: Default> Future for DefaultWriteByteFuture<'a, S> {
+        type Output = Result<(), S::Error>;
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            let byte = self.byte;
+            match self.serial.write(byte) {
+                Ok(()) => Poll::Ready(Ok(())),
+                Err(nb::Error::Other(e)) => Poll::Ready(Err(e)),
+                Err(nb::Error::WouldBlock) => {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                },
             }
         }
     }
