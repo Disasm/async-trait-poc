@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![feature(generic_associated_types)]
 
 use core::future::Future;
 use core::task::{Context, Poll};
@@ -119,21 +120,21 @@ impl Serial {
     }
 }
 
-pub trait AsyncWrite<'a> {
+pub trait AsyncWrite {
     /// Transmit error
     type Error;
     /// Transmit future for polling on completion
-    type WriteFuture: Future<Output=Result<(), Self::Error>>;
+    type WriteFuture<'t>: Future<Output=Result<(), Self::Error>>;
 
     /// Transmit the provided data on the specified channel
-    fn write(&'a mut self, data: &'a [u8]) -> Self::WriteFuture;
+    fn write<'a>(&'a mut self, data: &'a [u8]) -> Self::WriteFuture<'a>;
 }
 
-impl<'a> AsyncWrite<'a> for Serial {
+impl AsyncWrite for Serial {
     type Error = UartError;
-    type WriteFuture = SerialWriteFuture<'a>;
+    type WriteFuture<'t> = SerialWriteFuture<'t>;
 
-    fn write(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
+    fn write<'a>(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
         SerialWriteFuture {
             serial: self,
             data,
