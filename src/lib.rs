@@ -149,35 +149,35 @@ impl Uart {
     }
 }
 
-pub struct Serial<'a> {
-    uart: &'a mut Uart,
-}
-
-impl<'a> Serial<'a> {
-    pub fn new(uart: &'a mut Uart) -> Serial<'a> {
-        Self {
-            uart
-        }
-    }
-}
+// pub struct Serial<'a> {
+//     uart: &'a mut Uart,
+// }
+//
+// impl<'a> Serial<'a> {
+//     pub fn new(uart: &'a mut Uart) -> Serial<'a> {
+//         Self {
+//             uart
+//         }
+//     }
+// }
 
 pub trait AsyncWrite<'a> {
     /// Transmit error
     type Error;
     /// Transmit future for polling on completion
-    type WriteFuture: 'a + Future<Output=Result<(), Self::Error>>;
+    type WriteFuture: Future<Output=Result<(), Self::Error>>;
 
     /// Transmit the provided data on the specified channel
     fn try_write(&'a mut self, data: &'a [u8]) -> Self::WriteFuture;
 }
 
-impl<'a> AsyncWrite<'a> for Serial<'a> {
+impl<'a> AsyncWrite<'a> for Uart {
     type Error = UartError;
     type WriteFuture = SerialWriteFuture<'a>;
 
     fn try_write(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
         SerialWriteFuture {
-            uart: self.uart,
+            uart: self,
             data,
             offset: 0
         }
