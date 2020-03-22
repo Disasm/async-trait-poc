@@ -196,16 +196,7 @@ impl Future for SerialWriteFuture<'_> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut this = self.get_mut();
 
-        if this.offset == this.data.len() {
-            match this.serial.uart.flush() {
-                Ok(()) => Poll::Ready(Ok(())),
-                Err(nb::Error::WouldBlock) => {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                },
-                Err(nb::Error::Other(e)) => Poll::Ready(Err(e))
-            }
-        } else {
+        if this.offset <= this.data.len() {
             let byte = this.data[this.offset];
             match this.serial.uart.write_byte(byte) {
                 Ok(()) => {
@@ -213,6 +204,15 @@ impl Future for SerialWriteFuture<'_> {
                     cx.waker().wake_by_ref();
                     Poll::Pending
                 }
+                Err(nb::Error::WouldBlock) => {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                },
+                Err(nb::Error::Other(e)) => Poll::Ready(Err(e))
+            }
+        } else {
+            match this.serial.uart.flush() {
+                Ok(()) => Poll::Ready(Ok(())),
                 Err(nb::Error::WouldBlock) => {
                     cx.waker().wake_by_ref();
                     Poll::Pending
