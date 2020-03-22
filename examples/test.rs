@@ -22,7 +22,7 @@ impl<UART: AsyncWrite> AsyncDriver<UART> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let uart = Uart::new();
-    let mut serial = Serial::new(uart);
+    let serial = Serial::new(uart);
 
     //serial.write(b"Hello, world").await.unwrap();
     //serial.write(b"Hello, world\xff").await.unwrap();
