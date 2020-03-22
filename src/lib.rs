@@ -72,6 +72,7 @@ impl Serial {
         if !self.uart.busy {
             Poll::Ready(Ok(()))
         } else {
+            // TODO: save waker here and wake on interrupt
             cx.waker().wake_by_ref();
             Poll::Pending
         }
