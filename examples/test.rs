@@ -1,0 +1,15 @@
+use async_trait_poc::*;
+use std::pin::Pin;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut uart = Uart::new();
+    let mut serial = Serial::new(&mut uart);
+    //let mut serial = Pin::new_unchecked(&mut serial);
+
+    serial.try_write(b"Hello, world").await.unwrap();
+    //drop(serial);
+    //serial.try_write(b"Hello, world\xff").await.unwrap();
+
+    Ok(())
+}
