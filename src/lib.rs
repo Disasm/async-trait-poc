@@ -125,19 +125,33 @@ pub trait AsyncWrite {
     type Error;
     /// Write future for polling on completion
     type WriteFuture<'t>: Future<Output=Result<(), Self::Error>>;
+    /// Flush future for polling on completion
+    type FlushFuture<'t>: Future<Output=Result<(), Self::Error>>;
 
     /// Writes an array of bytes to the serial interface
+    /// When the future completes, data may not be fully transmitted.
+    /// Call `flush` to ensure that no data is left buffered.
     fn write<'a>(&'a mut self, data: &'a [u8]) -> Self::WriteFuture<'a>;
+
+    /// Ensures that none of the previously written words are still buffered
+    fn flush(&mut self) -> Self::FlushFuture<'_>;
 }
 
 impl AsyncWrite for Serial {
     type Error = UartError;
     type WriteFuture<'t> = SerialWriteFuture<'t>;
+    type FlushFuture<'t> = SerialFlushFuture<'t>;
 
     fn write<'a>(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
         SerialWriteFuture {
             serial: self,
             data,
+        }
+    }
+
+    fn flush(&mut self) -> SerialFlushFuture {
+        SerialFlushFuture {
+            serial: self
         }
     }
 }
@@ -160,6 +174,18 @@ impl Future for SerialWriteFuture<'_> {
                 other => return other,
             }
         }
+        Poll::Ready(Ok(()))
+    }
+}
+
+pub struct SerialFlushFuture<'a> {
+    serial: &'a mut Serial,
+}
+
+impl Future for SerialFlushFuture<'_> {
+    type Output = Result<(), UartError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.serial.flush(cx)
     }
 }
