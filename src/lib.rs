@@ -117,13 +117,6 @@ impl Serial {
             Poll::Pending
         }
     }
-
-    fn write_buf_async<'a>(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
-        SerialWriteFuture {
-            serial: self,
-            data,
-        }
-    }
 }
 
 pub trait AsyncWrite<'a> {
@@ -141,7 +134,10 @@ impl<'a> AsyncWrite<'a> for Serial {
     type WriteFuture = SerialWriteFuture<'a>;
 
     fn try_write(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
-        self.write_buf_async(data)
+        SerialWriteFuture {
+            serial: self,
+            data,
+        }
     }
 }
 
