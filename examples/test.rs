@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use async_trait_poc::*;
+use embedded_async_sandbox::serial::AsyncWrite;
 
 struct AsyncDriver<UART> {
     uart: UART

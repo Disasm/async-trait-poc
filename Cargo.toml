@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 pin-project = "0.4.8"
+embedded-async-sandbox = { path = "embedded-async-sandbox" }
 
 [dev-dependencies]
 tokio = { version = "0.2.13", features = ["macros"] }

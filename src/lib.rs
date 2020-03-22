@@ -5,6 +5,8 @@ use core::future::Future;
 use core::task::{Context, Poll};
 use core::pin::Pin;
 
+use embedded_async_sandbox::serial::AsyncWrite;
+
 // Proposed approach: Generics with associated type bounds
 // Implementers create device-specific TransmitFuture objects to poll to completion
 
@@ -118,23 +120,6 @@ impl Serial {
             Poll::Pending
         }
     }
-}
-
-pub trait AsyncWrite {
-    /// Transmit error
-    type Error;
-    /// Write future for polling on completion
-    type WriteFuture<'t>: Future<Output=Result<(), Self::Error>>;
-    /// Flush future for polling on completion
-    type FlushFuture<'t>: Future<Output=Result<(), Self::Error>>;
-
-    /// Writes an array of bytes to the serial interface
-    /// When the future completes, data may not be fully transmitted.
-    /// Call `flush` to ensure that no data is left buffered.
-    fn write<'a>(&'a mut self, data: &'a [u8]) -> Self::WriteFuture<'a>;
-
-    /// Ensures that none of the previously written words are still buffered
-    fn flush(&mut self) -> Self::FlushFuture<'_>;
 }
 
 impl AsyncWrite for Serial {
