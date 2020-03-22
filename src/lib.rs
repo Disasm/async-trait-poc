@@ -135,17 +135,15 @@ impl Future for SerialWriteFuture<'_> {
     type Output = Result<(), UartError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if let Some(byte) = self.data.first() {
+        while let Some(byte) = self.data.first() {
             match self.serial.write_byte_nowait(cx, *byte) {
                 Poll::Ready(Ok(())) => {
                     self.data = &self.data[1..];
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
+                    continue;
                 },
-                other => other,
+                other => return other,
             }
-        } else {
-            self.serial.flush(cx)
         }
+        self.serial.flush(cx)
     }
 }
