@@ -1,15 +1,6 @@
 #![allow(dead_code)]
 #![feature(generic_associated_types)]
 
-use core::future::Future;
-use core::task::{Context, Poll};
-use core::pin::Pin;
-
-use embedded_async_sandbox::serial::AsyncWrite;
-
-// Proposed approach: Generics with associated type bounds
-// Implementers create device-specific TransmitFuture objects to poll to completion
-
 #[derive(Copy, Clone, Debug)]
 pub enum UartError {
     InvalidData
@@ -85,92 +76,138 @@ impl Serial {
         }
     }
 
-    pub fn write_byte_nowait(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<()> {
-        self.uart.make_progress();
+    // pub fn write_byte_nowait(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<()> {
+    //     self.uart.make_progress();
+    //
+    //     if self.uart.has_space() {
+    //         self.uart.write_byte(byte);
+    //         println!("write_byte({:02x}) - Ok", byte);
+    //         Poll::Ready(())
+    //     } else {
+    //         println!("write_byte({:02x}) - WoudlBlock", byte);
+    //
+    //         // TODO: save waker here and wake on interrupt
+    //         cx.waker().wake_by_ref();
+    //         Poll::Pending
+    //     }
+    // }
+    //
+    // pub fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), UartError>> {
+    //     self.uart.make_progress();
+    //
+    //     if self.uart.error {
+    //         self.uart.error = false;
+    //         return Poll::Ready(Err(UartError::InvalidData));
+    //     }
+    //
+    //     if self.uart.is_idle() {
+    //         println!("flush() - Ok");
+    //         Poll::Ready(Ok(()))
+    //     } else {
+    //         println!("flush() - WouldBlock");
+    //
+    //         // TODO: save waker here and wake on interrupt
+    //         cx.waker().wake_by_ref();
+    //         Poll::Pending
+    //     }
+    // }
+}
 
-        if self.uart.has_space() {
-            self.uart.write_byte(byte);
-            println!("write_byte({:02x}) - Ok", byte);
-            Poll::Ready(())
-        } else {
-            println!("write_byte({:02x}) - WoudlBlock", byte);
+impl embedded_hal::serial::Write<u8> for Serial {
+    type Error = UartError;
 
-            // TODO: save waker here and wake on interrupt
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
-    }
-
-    pub fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), UartError>> {
+    fn write(&mut self, byte: u8) -> nb::Result<(), Self::Error> {
         self.uart.make_progress();
 
         if self.uart.error {
             self.uart.error = false;
-            return Poll::Ready(Err(UartError::InvalidData));
+            return Err(nb::Error::Other(UartError::InvalidData));
+        }
+
+        if self.uart.has_space() {
+            println!("write_byte({:02x}) - Ok", byte);
+            self.uart.write_byte(byte);
+            Ok(())
+        } else {
+            println!("write_byte({:02x}) - WouldBlock", byte);
+            Err(nb::Error::WouldBlock)
+        }
+    }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Error> {
+        self.uart.make_progress();
+
+        if self.uart.error {
+            self.uart.error = false;
+            return Err(nb::Error::Other(UartError::InvalidData));
         }
 
         if self.uart.is_idle() {
             println!("flush() - Ok");
-            Poll::Ready(Ok(()))
+            Ok(())
         } else {
             println!("flush() - WouldBlock");
-
-            // TODO: save waker here and wake on interrupt
-            cx.waker().wake_by_ref();
-            Poll::Pending
+            Err(nb::Error::WouldBlock)
         }
     }
 }
 
-impl AsyncWrite for Serial {
-    type Error = UartError;
-    type WriteFuture<'t> = SerialWriteFuture<'t>;
-    type FlushFuture<'t> = SerialFlushFuture<'t>;
+impl embedded_async_sandbox::serial::write::Default for Serial {}
 
-    fn write<'a>(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
-        SerialWriteFuture {
-            serial: self,
-            data,
-        }
-    }
-
-    fn flush(&mut self) -> SerialFlushFuture {
-        SerialFlushFuture {
-            serial: self
-        }
-    }
-}
-
-pub struct SerialWriteFuture<'a> {
-    serial: &'a mut Serial,
-    data: &'a [u8],
-}
-
-impl Future for SerialWriteFuture<'_> {
-    type Output = Result<(), UartError>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        while let Some(byte) = self.data.first() {
-            match self.serial.write_byte_nowait(cx, *byte) {
-                Poll::Ready(()) => {
-                    self.data = &self.data[1..];
-                    continue;
-                },
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-        Poll::Ready(Ok(()))
-    }
-}
-
-pub struct SerialFlushFuture<'a> {
-    serial: &'a mut Serial,
-}
-
-impl Future for SerialFlushFuture<'_> {
-    type Output = Result<(), UartError>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.serial.flush(cx)
-    }
-}
+// impl AsyncWrite for Serial {
+//     type Error = UartError;
+//     type WriteByteFuture<'t> = SerialWriteByteFuture;
+//     type WriteFuture<'t> = SerialWriteFuture<'t>;
+//     type FlushFuture<'t> = SerialFlushFuture<'t>;
+//
+//     fn write_byte(&mut self, byte: u8) -> Self::WriteByteFuture {
+//         unimplemented!()
+//     }
+//
+//     fn write<'a>(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
+//         SerialWriteFuture {
+//             serial: self,
+//             data,
+//         }
+//     }
+//
+//     fn flush(&mut self) -> SerialFlushFuture {
+//         SerialFlushFuture {
+//             serial: self
+//         }
+//     }
+// }
+//
+// pub struct SerialWriteFuture<'a> {
+//     serial: &'a mut Serial,
+//     data: &'a [u8],
+// }
+//
+// impl Future for SerialWriteFuture<'_> {
+//     type Output = Result<(), UartError>;
+//
+//     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+//         while let Some(byte) = self.data.first() {
+//             match self.serial.write_byte_nowait(cx, *byte) {
+//                 Poll::Ready(()) => {
+//                     self.data = &self.data[1..];
+//                     continue;
+//                 },
+//                 Poll::Pending => return Poll::Pending,
+//             }
+//         }
+//         Poll::Ready(Ok(()))
+//     }
+// }
+//
+// pub struct SerialFlushFuture<'a> {
+//     serial: &'a mut Serial,
+// }
+//
+// impl Future for SerialFlushFuture<'_> {
+//     type Output = Result<(), UartError>;
+//
+//     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+//         self.serial.flush(cx)
+//     }
+// }
