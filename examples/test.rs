@@ -15,8 +15,8 @@ impl<UART: AsyncWrite> AsyncDriver<UART> {
     }
 
     async fn send_hello(&mut self) -> Result<(), UART::Error> {
-        self.uart.write(b"Hello!").await?;
-        self.uart.flush().await
+        self.uart.async_write(b"Hello!").await?;
+        self.uart.async_flush().await
     }
 }
 

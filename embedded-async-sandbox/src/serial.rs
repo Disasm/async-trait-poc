@@ -10,10 +10,10 @@ pub trait AsyncRead {
     type ReadFuture<'t>: Future<Output=Result<(), Self::Error>>;
 
     /// Reads a single byte from the serial interface
-    fn read_byte(&mut self) -> Self::ReadByteFuture<'_>;
+    fn async_read_byte(&mut self) -> Self::ReadByteFuture<'_>;
 
     /// Reads an array of bytes from the serial interface
-    fn read<'a>(&'a mut self, data: &'a mut [u8]) -> Self::ReadFuture<'a>;
+    fn async_read<'a>(&'a mut self, data: &'a mut [u8]) -> Self::ReadFuture<'a>;
 }
 
 /// Write half of a serial interface
@@ -30,15 +30,15 @@ pub trait AsyncWrite {
     /// Writes a single byte to the serial interface
     /// When the future completes, data may not be fully transmitted.
     /// Call `flush` to ensure that no data is left buffered.
-    fn write_byte(&mut self, byte: u8) -> Self::WriteByteFuture<'_>;
+    fn async_write_byte(&mut self, byte: u8) -> Self::WriteByteFuture<'_>;
 
     /// Writes an array of bytes to the serial interface
     /// When the future completes, data may not be fully transmitted.
     /// Call `flush` to ensure that no data is left buffered.
-    fn write<'a>(&'a mut self, data: &'a [u8]) -> Self::WriteFuture<'a>;
+    fn async_write<'a>(&'a mut self, data: &'a [u8]) -> Self::WriteFuture<'a>;
 
     /// Ensures that none of the previously written words are still buffered
-    fn flush(&mut self) -> Self::FlushFuture<'_>;
+    fn async_flush(&mut self) -> Self::FlushFuture<'_>;
 }
 
 pub mod read {
@@ -61,13 +61,13 @@ pub mod read {
         type ReadByteFuture<'t> = DefaultReadByteFuture<'t, S>;
         type ReadFuture<'t> = DefaultReadFuture<'t, S>;
 
-        fn read_byte(&mut self) -> Self::ReadByteFuture<'_> {
+        fn async_read_byte(&mut self) -> Self::ReadByteFuture<'_> {
             DefaultReadByteFuture {
                 serial: self
             }
         }
 
-        fn read<'a>(&'a mut self, data: &'a mut [u8]) -> Self::ReadFuture<'a> {
+        fn async_read<'a>(&'a mut self, data: &'a mut [u8]) -> Self::ReadFuture<'a> {
             DefaultReadFuture {
                 serial: self,
                 data,
@@ -148,21 +148,21 @@ pub mod write {
         type WriteFuture<'t> = DefaultWriteFuture<'t, S>;
         type FlushFuture<'t> = DefaultFlushFuture<'t, S>;
 
-        fn write_byte(&mut self, byte: u8) -> Self::WriteByteFuture<'_> {
+        fn async_write_byte(&mut self, byte: u8) -> Self::WriteByteFuture<'_> {
             DefaultWriteByteFuture {
                 serial: self,
                 byte
             }
         }
 
-        fn write<'a>(&'a mut self, data: &'a [u8]) -> DefaultWriteFuture<'a, S> {
+        fn async_write<'a>(&'a mut self, data: &'a [u8]) -> DefaultWriteFuture<'a, S> {
             DefaultWriteFuture {
                 serial: self,
                 data,
             }
         }
 
-        fn flush(&mut self) -> DefaultFlushFuture<'_, S> {
+        fn async_flush(&mut self) -> DefaultFlushFuture<'_, S> {
             DefaultFlushFuture {
                 serial: self
             }
