@@ -198,21 +198,19 @@ pub struct SerialWriteFuture<'a> {
 impl Future for SerialWriteFuture<'_> {
     type Output = Result<(), UartError>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut this = self.get_mut();
-
-        if this.offset <= this.data.len() {
-            let byte = this.data[this.offset];
-            match this.serial.uart.write_byte(cx, byte) {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.offset <= self.data.len() {
+            let byte = self.data[self.offset];
+            match self.serial.uart.write_byte(cx, byte) {
                 Poll::Ready(Ok(())) => {
-                    this.offset += 1;
+                    self.offset += 1;
                     cx.waker().wake_by_ref();
                     Poll::Pending
                 },
                 other => other,
             }
         } else {
-            this.serial.uart.flush(cx)
+            self.serial.uart.flush(cx)
         }
     }
 }
