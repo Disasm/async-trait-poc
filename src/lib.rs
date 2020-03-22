@@ -29,6 +29,14 @@ impl Uart {
         }
     }
 
+    fn is_idle(&self) -> bool {
+        !self.busy
+    }
+
+    fn has_space(&self) -> bool {
+        !self.busy
+    }
+
     fn write_byte(&mut self, byte: u8) {
         if !self.busy {
             self.data = byte;
@@ -69,7 +77,7 @@ impl Serial {
             self.uart.error = false;
             return Poll::Ready(Err(UartError::InvalidData));
         }
-        if !self.uart.busy {
+        if self.uart.is_idle() {
             Poll::Ready(Ok(()))
         } else {
             // TODO: save waker here and wake on interrupt
@@ -79,7 +87,7 @@ impl Serial {
     }
 
     pub fn write_byte_nowait(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<Result<(), UartError>> {
-        if !self.uart.busy {
+        if self.uart.has_space() {
             self.uart.write_byte(byte);
             println!("write_byte({:02x}) - Ok", byte);
             Poll::Ready(Ok(()))
@@ -90,7 +98,7 @@ impl Serial {
     }
 
     pub fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), UartError>> {
-        if !self.uart.busy {
+        if self.uart.is_idle() {
             println!("flush() - Ok");
             Poll::Ready(Ok(()))
         } else {
