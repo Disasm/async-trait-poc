@@ -48,6 +48,7 @@ impl Uart {
     fn make_progress(&mut self) {
         if self.busy {
             if self.ticks_to_send == 0 {
+                println!("byte! {:02x}", self.data);
                 if self.data == 0xff {
                     self.error = true;
                 }
@@ -70,40 +71,39 @@ impl Serial {
         }
     }
 
-    fn progress(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), UartError>> {
+    pub fn write_byte_nowait(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<Result<(), UartError>> {
         self.uart.make_progress();
 
-        if self.uart.error {
-            self.uart.error = false;
-            return Poll::Ready(Err(UartError::InvalidData));
-        }
-        if self.uart.is_idle() {
-            Poll::Ready(Ok(()))
-        } else {
-            // TODO: save waker here and wake on interrupt
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
-    }
-
-    pub fn write_byte_nowait(&mut self, cx: &mut Context<'_>, byte: u8) -> Poll<Result<(), UartError>> {
         if self.uart.has_space() {
             self.uart.write_byte(byte);
             println!("write_byte({:02x}) - Ok", byte);
             Poll::Ready(Ok(()))
         } else {
             println!("write_byte({:02x}) - WoudlBlock", byte);
-            self.progress(cx)
+
+            // TODO: save waker here and wake on interrupt
+            cx.waker().wake_by_ref();
+            Poll::Pending
         }
     }
 
     pub fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), UartError>> {
+        self.uart.make_progress();
+
+        if self.uart.error {
+            self.uart.error = false;
+            return Poll::Ready(Err(UartError::InvalidData));
+        }
+
         if self.uart.is_idle() {
             println!("flush() - Ok");
             Poll::Ready(Ok(()))
         } else {
             println!("flush() - WouldBlock");
-            self.progress(cx)
+
+            // TODO: save waker here and wake on interrupt
+            cx.waker().wake_by_ref();
+            Poll::Pending
         }
     }
 
