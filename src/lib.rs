@@ -1,7 +1,8 @@
+#![allow(dead_code)]
+
 use core::future::Future;
 use core::task::{Context, Poll};
 use core::pin::Pin;
-use pin_project::pin_project;
 
 // Proposed approach: Generics with associated type bounds
 // Implementers create device-specific TransmitFuture objects to poll to completion
@@ -100,6 +101,7 @@ impl Uart {
                                 return Poll::Ready(Err(UartError::InvalidData));
                             }
                         }
+                        cx.waker().wake_by_ref();
                         Poll::Pending
                     },
                 }
@@ -134,6 +136,7 @@ impl Uart {
                                 return Poll::Ready(Err(UartError::InvalidData));
                             }
                         }
+                        cx.waker().wake_by_ref();
                         Poll::Pending
                     },
                 }

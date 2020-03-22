@@ -1,5 +1,4 @@
 use async_trait_poc::*;
-use std::pin::Pin;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
