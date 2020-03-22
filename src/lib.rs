@@ -165,7 +165,6 @@ impl Serial {
         SerialWriteFuture {
             serial: self,
             data,
-            offset: 0
         }
     }
 }
@@ -192,18 +191,16 @@ impl<'a> AsyncWrite<'a> for Serial {
 pub struct SerialWriteFuture<'a> {
     serial: &'a mut Serial,
     data: &'a [u8],
-    offset: usize,
 }
 
 impl Future for SerialWriteFuture<'_> {
     type Output = Result<(), UartError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.offset <= self.data.len() {
-            let byte = self.data[self.offset];
-            match self.serial.uart.write_byte(cx, byte) {
+        if let Some(byte) = self.data.first() {
+            match self.serial.uart.write_byte(cx, *byte) {
                 Poll::Ready(Ok(())) => {
-                    self.offset += 1;
+                    self.data = &self.data[1..];
                     cx.waker().wake_by_ref();
                     Poll::Pending
                 },
