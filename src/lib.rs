@@ -13,46 +13,57 @@ pub enum UartError {
 }
 
 pub struct Uart {
-    busy: bool,
+    fifo: [u8; 4],
+    fifo_size: usize,
     error: bool,
-    data: u8,
     ticks_to_send: usize,
 }
 
 impl Uart {
     pub fn new() -> Self {
         Self {
-            busy: false,
+            fifo: [0; 4],
+            fifo_size: 0,
             error: false,
-            data: 0,
-            ticks_to_send: 0
+            ticks_to_send: 0,
         }
     }
 
     fn is_idle(&self) -> bool {
-        !self.busy
+        self.fifo_size == 0
     }
 
     fn has_space(&self) -> bool {
-        !self.busy
+        self.fifo_size < self.fifo.len()
     }
 
     fn write_byte(&mut self, byte: u8) {
-        if !self.busy {
-            self.data = byte;
-            self.busy = true;
-            self.ticks_to_send = 3;
+        if self.fifo_size < self.fifo.len() {
+            self.fifo[self.fifo_size] = byte;
+            if self.fifo_size == 0 {
+                // start sending
+                self.ticks_to_send = 3;
+            }
+            self.fifo_size += 1;
         }
     }
 
     fn make_progress(&mut self) {
-        if self.busy {
+        if self.fifo_size > 0 {
             if self.ticks_to_send == 0 {
-                println!("byte! {:02x}", self.data);
-                if self.data == 0xff {
+                let byte = self.fifo[0];
+                self.fifo.rotate_left(1);
+                self.fifo_size -= 1;
+
+                println!("byte! {:02x}", byte);
+                if byte == 0xff {
                     self.error = true;
                 }
-                self.busy = false;
+
+                if self.fifo_size > 0 {
+                    // start sending next byte
+                    self.ticks_to_send = 3;
+                }
             } else {
                 self.ticks_to_send -= 1;
             }
