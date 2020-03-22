@@ -74,10 +74,22 @@ impl Uart {
             }
         }
     }
+}
+
+pub struct Serial {
+    uart: Uart,
+}
+
+impl Serial {
+    pub fn new(uart: Uart) -> Serial {
+        Self {
+            uart
+        }
+    }
 
     async fn write_byte_async(&mut self, byte: u8) -> Result<(), UartError> {
         struct Write<'a> {
-            uart: &'a mut Uart,
+            serial: &'a mut Serial,
             byte: u8,
         }
 
@@ -85,18 +97,18 @@ impl Uart {
             type Output = Result<(), UartError>;
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                match self.uart.state {
+                match self.serial.uart.state {
                     UartState::Idle => {
-                        self.uart.state = UartState::Sending(self.byte, 5);
+                        self.serial.uart.state = UartState::Sending(self.byte, 5);
                         println!("write_byte({:02x}) - Ok", self.byte);
                         Poll::Ready(Ok(()))
                     },
                     UartState::Sending(byte, counter) => {
                         println!("write_byte({:02x}) - WoudlBlock", self.byte);
                         if counter > 0 {
-                            self.uart.state = UartState::Sending(byte, counter - 1);
+                            self.serial.uart.state = UartState::Sending(byte, counter - 1);
                         } else {
-                            self.uart.state = UartState::Idle;
+                            self.serial.uart.state = UartState::Idle;
                             if byte == 0xff {
                                 return Poll::Ready(Err(UartError::InvalidData));
                             }
@@ -107,31 +119,31 @@ impl Uart {
                 }
             }
         }
-        
+
         Write {
-            uart: self,
+            serial: self,
             byte
         }.await
     }
 
     async fn flush_async(&mut self) -> Result<(), UartError> {
         struct WaitIdle<'a> {
-            uart: &'a mut Uart,
+            serial: &'a mut Serial,
         }
 
         impl Future for WaitIdle<'_> {
             type Output = Result<(), UartError>;
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                match self.uart.state {
+                match self.serial.uart.state {
                     UartState::Idle => {
                         Poll::Ready(Ok(()))
                     },
                     UartState::Sending(byte, counter) => {
                         if counter > 0 {
-                            self.uart.state = UartState::Sending(byte, counter - 1);
+                            self.serial.uart.state = UartState::Sending(byte, counter - 1);
                         } else {
-                            self.uart.state = UartState::Idle;
+                            self.serial.uart.state = UartState::Idle;
                             if byte == 0xff {
                                 return Poll::Ready(Err(UartError::InvalidData));
                             }
@@ -144,22 +156,10 @@ impl Uart {
         }
 
         WaitIdle {
-            uart: self
+            serial: self
         }.await
     }
 }
-
-// pub struct Serial<'a> {
-//     uart: &'a mut Uart,
-// }
-//
-// impl<'a> Serial<'a> {
-//     pub fn new(uart: &'a mut Uart) -> Serial<'a> {
-//         Self {
-//             uart
-//         }
-//     }
-// }
 
 pub trait AsyncWrite<'a> {
     /// Transmit error
@@ -171,13 +171,13 @@ pub trait AsyncWrite<'a> {
     fn try_write(&'a mut self, data: &'a [u8]) -> Self::WriteFuture;
 }
 
-impl<'a> AsyncWrite<'a> for Uart {
+impl<'a> AsyncWrite<'a> for Serial {
     type Error = UartError;
     type WriteFuture = SerialWriteFuture<'a>;
 
     fn try_write(&'a mut self, data: &'a [u8]) -> SerialWriteFuture<'a> {
         SerialWriteFuture {
-            uart: self,
+            serial: self,
             data,
             offset: 0
         }
@@ -185,7 +185,7 @@ impl<'a> AsyncWrite<'a> for Uart {
 }
 
 pub struct SerialWriteFuture<'a> {
-    uart: &'a mut Uart,
+    serial: &'a mut Serial,
     data: &'a [u8],
     offset: usize,
 }
@@ -197,7 +197,7 @@ impl Future for SerialWriteFuture<'_> {
         let mut this = self.get_mut();
 
         if this.offset == this.data.len() {
-            match this.uart.flush() {
+            match this.serial.uart.flush() {
                 Ok(()) => Poll::Ready(Ok(())),
                 Err(nb::Error::WouldBlock) => {
                     cx.waker().wake_by_ref();
@@ -207,7 +207,7 @@ impl Future for SerialWriteFuture<'_> {
             }
         } else {
             let byte = this.data[this.offset];
-            match this.uart.write_byte(byte) {
+            match this.serial.uart.write_byte(byte) {
                 Ok(()) => {
                     this.offset += 1;
                     cx.waker().wake_by_ref();
