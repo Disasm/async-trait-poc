@@ -63,7 +63,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //serial.write(b"Hello, world").await.unwrap();
     //serial.write(b"Hello, world\xff").await.unwrap();
 
-    let mut driver = AsyncDriver::new(serial);
+    let serial_wrapper = SerialWrapper(serial);
+
+    let mut driver = AsyncDriver::new(serial_wrapper);
     driver.send_hello().await.unwrap();
 
     Ok(())
